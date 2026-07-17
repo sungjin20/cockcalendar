@@ -1,0 +1,3 @@
+import { NextResponse } from "next/server";
+import { dbQuery } from "../../../../db/postgres";
+export async function GET(_:Request,{params}:{params:Promise<{id:string}>}){const {id}=await params;try{const result=await dbQuery("SELECT c.id::text,c.title,c.venue,c.region,c.start_date AS \"startDate\",c.end_date AS \"endDate\",c.organizer,c.description,s.platform,s.source_url AS \"sourceUrl\" FROM competitions c LEFT JOIN competition_sources s ON s.competition_id=c.id WHERE c.id=$1",[id]);return result.rowCount?NextResponse.json(result.rows[0]):NextResponse.json({error:"Competition not found"},{status:404});}catch(error){return NextResponse.json({error:error instanceof Error?error.message:"Database unavailable"},{status:503});}}

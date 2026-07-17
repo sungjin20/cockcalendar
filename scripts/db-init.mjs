@@ -1,0 +1,14 @@
+import pg from "pg";
+import fs from "node:fs/promises";
+const { Pool } = pg;
+const connectionString = process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/badminton_events";
+const target = new URL(connectionString);
+const database = target.pathname.replace(/^\//, "") || "badminton_events";
+target.pathname = "/postgres";
+const admin = new Pool({ connectionString: target.toString() });
+await admin.query(`CREATE DATABASE "${database.replaceAll('"', '""')}"`).catch((error) => { if (error.code !== "42P04") throw error; });
+await admin.end();
+const pool = new Pool({ connectionString });
+await pool.query(await fs.readFile(new URL("../db/schema.sql", import.meta.url), "utf8"));
+await pool.end();
+console.log("PostgreSQL schema initialized.");
