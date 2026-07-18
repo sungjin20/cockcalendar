@@ -249,3 +249,100 @@
   .event-card:not(:has(.event-poster)) .date-block { grid-column: 1; }
   .event-card:not(:has(.event-poster)) .card-arrow { grid-column: 2; }
 }
+
+/* Desktop presentation aligned with the polished mobile card system. */
+@media (min-width: 701px) {
+  .site-header { height: 76px; padding: 0 max(5vw, 48px); box-shadow: 0 1px 0 rgba(23,59,57,.04); }
+  .hero { min-height: 570px; padding-top: 110px; padding-bottom: 90px; }
+  .hero-copy { max-width: 660px; }
+  .hero-description { max-width: 460px; font-size: 16px; }
+
+  .calendar-section { padding: 86px 5vw 38px; }
+  .calendar-heading,
+  .calendar-grid,
+  .platform-legend { width: min(1180px, 100%); margin-left: auto !important; margin-right: auto !important; }
+  .calendar-heading { padding: 0; margin-bottom: 26px; }
+  .calendar-heading h2 { font-size: 44px; }
+  .platform-legend { margin-bottom: 18px !important; }
+  .calendar-grid { border-radius: 18px; box-shadow: 0 16px 45px rgba(23,59,57,.08); }
+  .weekdays { background: #f4f7f3; }
+  .weekdays div { padding: 15px 8px; }
+  .day-cell { min-height: 128px; padding: 10px; transition: background .18s ease; }
+  .day-cell:not(.is-past-day):hover { background: #f5faf6; }
+
+  .content { max-width: 1180px; padding: 86px 0 120px; }
+  .content > .section-heading { align-items: flex-end; margin-bottom: 28px; }
+  .content > .section-heading h2 { font-size: 42px; }
+  .filters {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 190px;
+    gap: 12px;
+    margin-bottom: 24px;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: rgba(255,255,255,.7);
+    box-shadow: 0 8px 24px rgba(23,59,57,.05);
+  }
+  .search-field { min-height: 50px; border-radius: 11px; }
+  .filters select { width: 100%; min-width: 0; height: 50px; border-radius: 11px; }
+
+  .event-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; border-top: 0; }
+  .event-card {
+    position: relative;
+    display: grid;
+    grid-template-columns: 88px minmax(0, 1fr) 24px;
+    grid-template-rows: auto auto;
+    column-gap: 16px;
+    row-gap: 9px;
+    align-items: start;
+    min-height: 158px;
+    padding: 18px;
+    border: 1px solid #e0e5de;
+    border-radius: 18px;
+    background: rgba(255,255,255,.78);
+    box-shadow: 0 8px 24px rgba(23,59,57,.055);
+    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+  }
+  .event-card:hover { padding: 18px; border-color: #cbd9cf; background: #fff; box-shadow: 0 15px 34px rgba(23,59,57,.1); transform: translateY(-3px); }
+  .event-card > .event-poster {
+    display: block;
+    grid-column: 1;
+    grid-row: 1 / 3;
+    order: initial !important;
+    width: 88px;
+    height: 122px;
+    margin: 0;
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    background: #fff;
+    object-fit: contain;
+  }
+  .event-card .event-main { grid-column: 2; grid-row: 1; min-width: 0; padding: 0; }
+  .event-card .event-topline { margin-bottom: 9px; }
+  .event-card .event-main h3 {
+    display: -webkit-box;
+    overflow: hidden;
+    margin: 0 0 8px;
+    font-size: 18px;
+    line-height: 1.4;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  .event-card .event-main p { overflow: hidden; font-size: 13px; white-space: nowrap; text-overflow: ellipsis; }
+  .event-card .date-block { grid-column: 2; grid-row: 2; width: auto; margin: 0; padding: 0; border: 0; display: block; }
+  .event-card .date-block strong { font-size: 13px; color: var(--ink); font-weight: 800; }
+  .event-card .card-arrow { grid-column: 3; grid-row: 1 / 3; align-self: center; position: static; margin: 0; font-size: 21px; }
+  .event-card:not(:has(.event-poster)) { grid-template-columns: minmax(0, 1fr) 24px; }
+  .event-card:not(:has(.event-poster)) .event-main,
+  .event-card:not(:has(.event-poster)) .date-block { grid-column: 1; }
+  .event-card:not(:has(.event-poster)) .card-arrow { grid-column: 2; }
+  .pagination { margin-top: 36px; }
+  .pagination button { border-radius: 10px; padding: 11px 18px; }
+}
+
+@media (min-width: 701px) and (max-width: 1050px) {
+  .content { padding-left: 4vw; padding-right: 4vw; }
+  .event-list { grid-template-columns: 1fr; }
+}
