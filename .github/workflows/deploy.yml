@@ -9,35 +9,89 @@ concurrency:
   group: production
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  packages: write
+
+env:
+  WEB_IMAGE: ghcr.io/${{ github.repository }}-web
+  WORKER_IMAGE: ghcr.io/${{ github.repository }}-worker
+
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment: production
     steps:
       - uses: actions/checkout@v4
 
-      - name: Upload application
-        uses: appleboy/scp-action@v1
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          port: 22
-          source: "."
-          target: "/opt/cockcalendar/release"
-          overwrite: true
-          rm: true
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Build and restart services
-        uses: appleboy/ssh-action@v1
+      - name: Sign in to GHCR
+        uses: docker/login-action@v3
         with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          port: 22
-          script_stop: true
-          script: |
-            cd /opt/cockcalendar/release
-            sudo docker compose --env-file /opt/cockcalendar/.env -f docker-compose.prod.yml build
-            sudo docker compose --env-file /opt/cockcalendar/.env -f docker-compose.prod.yml up -d --remove-orphans
-            sudo docker image prune -f
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: web
+          push: true
+          tags: |
+            ${{ env.WEB_IMAGE }}:${{ github.sha }}
+            ${{ env.WEB_IMAGE }}:latest
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+      - name: Build and push worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: worker
+          push: true
+          tags: |
+            ${{ env.WORKER_IMAGE }}:${{ github.sha }}
+            ${{ env.WORKER_IMAGE }}:latest
+          cache-from: type=gha,scope=worker
+          cache-to: type=gha,mode=max,scope=worker
+
+  deploy:
+    needs: build
+    runs-on: [self-hosted, linux, x64, cockcalendar-prod]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sign in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install deployment configuration
+        run: |
+          install -d /opt/cockcalendar/release/db
+          install -m 0644 docker-compose.prod.yml Caddyfile /opt/cockcalendar/release/
+          install -m 0644 db/schema.sql /opt/cockcalendar/release/db/schema.sql
+
+      - name: Pull images and restart services
+        env:
+          WEB_IMAGE: ${{ env.WEB_IMAGE }}:${{ github.sha }}
+          WORKER_IMAGE: ${{ env.WORKER_IMAGE }}:${{ github.sha }}
+        run: |
+          cd /opt/cockcalendar/release
+          docker compose --env-file /opt/cockcalendar/.env -f docker-compose.prod.yml pull
+          docker compose --env-file /opt/cockcalendar/.env -f docker-compose.prod.yml up -d --no-build --remove-orphans
+          docker image prune -f
+
+      - name: Verify production
+        run: |
+          for attempt in {1..12}; do
+            if curl --fail --silent --show-error https://cockcalendar.sungjinlabs.com/api/competitions >/dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1
