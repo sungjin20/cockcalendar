@@ -1,0 +1,43 @@
+name: Deploy production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload application
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: 22
+          source: "."
+          target: "/opt/cockcalendar/release"
+          overwrite: true
+          rm: true
+
+      - name: Build and restart services
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: 22
+          script_stop: true
+          script: |
+            cd /opt/cockcalendar/release
+            sudo docker compose --env-file /opt/cockcalendar/.env -f docker-compose.prod.yml build
+            sudo docker compose --env-file /opt/cockcalendar/.env -f docker-compose.prod.yml up -d --remove-orphans
+            sudo docker image prune -f

@@ -10,7 +10,20 @@ const logs: CollectorLog[] = [];
 export function getCollectorLogs(platform?: string) { return platform && platform !== "all" ? logs.filter(x => x.platform === platform) : logs; }
 function parseDate(value: string) { const m = value.match(/(20\d{2})[^\d]+(\d{1,2})[^\d]+(\d{1,2})/); return m ? `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}` : null; }
 function parseFacecockPeriod(value: string) { const start = parseDate(value); if (!start) return { startDate: null, endDate: null }; const [year, month] = start.split("-"); const fullDates = [...value.matchAll(/(20\d{2})[^\d]+(\d{1,2})[^\d]+(\d{1,2})/g)]; if (fullDates.length > 1) return { startDate: start, endDate: `${fullDates[1][1]}-${fullDates[1][2].padStart(2, "0")}-${fullDates[1][3].padStart(2, "0")}` }; const shortEnd = value.match(/(?:~|～|\-)[^\d]*(\d{1,2})일/); return { startDate: start, endDate: shortEnd ? `${year}-${month}-${shortEnd[1].padStart(2, "0")}` : start }; }
-async function fetchText(url: string, headers: Record<string, string> = {}) { const r = await fetch(url, { headers, signal: AbortSignal.timeout(15000) }); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.text(); }
+async function fetchText(url: string, headers: Record<string, string> = {}) {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await fetch(url, { headers, signal: AbortSignal.timeout(30000) });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.text();
+    } catch (error) {
+      lastError = error;
+      if (attempt < 3) await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("fetch failed");
+}
 function decodeHtml(value: string) { return value.replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/&#(?:0*39|x0*27);/gi, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n))).replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16))); }
 function htmlText(value: string, multiline = false) { const normalized = multiline ? value.replace(/<br\s*\/?\s*>/gi, "\n").replace(/<\/p>/gi, "\n") : value; return decodeHtml(normalized.replace(/<[^>]+>/g, " ")).replace(multiline ? /[ \t]+/g : /\s+/g, " ").replace(/\n\s+/g, "\n").trim(); }
 function wekkukField(html: string, label: string) { const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); return html.match(new RegExp(`<div class=["']gm-stem["'][^>]*>[\\s\\S]*?<p class=["']gm-item["'][^>]*>\\s*${escaped}[\\s\\S]*?<div class=["']gm-text["'][^>]*>([\\s\\S]*?)<\\/div>\\s*<\\/div>`, "i"))?.[1] || ""; }

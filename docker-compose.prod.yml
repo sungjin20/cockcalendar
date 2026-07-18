@@ -1,0 +1,69 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: badminton_events
+      POSTGRES_USER: cockcalendar
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cockcalendar -d badminton_events"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 450m
+
+  web:
+    build:
+      context: .
+      target: web
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://cockcalendar:${POSTGRES_PASSWORD}@postgres:5432/badminton_events
+      DB_AUTO_INIT: "true"
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
+      ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET:?ADMIN_SESSION_SECRET is required}
+      TZ: Asia/Seoul
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 650m
+
+  worker:
+    build:
+      context: .
+      target: worker
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://cockcalendar:${POSTGRES_PASSWORD}@postgres:5432/badminton_events
+      DB_AUTO_INIT: "true"
+      BADDY_TEL_NO: ${BADDY_TEL_NO:?BADDY_TEL_NO is required}
+      BADDY_KAKAO_SNS_ID: ${BADDY_KAKAO_SNS_ID:?BADDY_KAKAO_SNS_ID is required}
+      TZ: Asia/Seoul
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 450m
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+    mem_limit: 100m
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
