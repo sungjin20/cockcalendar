@@ -6,7 +6,9 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "next dev",
+    "dev": "concurrently -k \"npm run dev:proxy\" \"npm run dev:next\"",
+    "dev:next": "next dev -p 3001",
+    "dev:proxy": "node scripts/dev-proxy.mjs",
     "dev:cloudflare": "vinext dev",
     "build": "vinext build",
     "start": "next start",

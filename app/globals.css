@@ -10,6 +10,7 @@
 .site-header nav{gap:52px;font-size:16px;font-weight:700}.site-header nav a{padding:12px 4px;transition:color .2s}.site-header nav a:hover{color:var(--orange)}.site-header nav a:nth-child(3),.site-header .admin-link{display:none}.hero{position:relative}.hero-copy{position:relative;z-index:2}.hero-art{position:absolute;top:0;right:0;width:55%;height:100%;margin:0;background-size:cover;background-position:center;mix-blend-mode:multiply;-webkit-mask-image:linear-gradient(to right,transparent 0,rgba(0,0,0,.45) 10%,#000 24%,#000 100%);mask-image:linear-gradient(to right,transparent 0,rgba(0,0,0,.45) 10%,#000 24%,#000 100%)}.hero-note{left:22%;bottom:7%}
 @media(max-width:700px){.site-header nav{display:none}.hero-art{position:relative;top:auto;right:auto;width:100%;height:240px;margin:28px 0 -18px;background-size:cover;background-position:center right;-webkit-mask-image:linear-gradient(to right,transparent 0,#000 12%,#000 100%);mask-image:linear-gradient(to right,transparent 0,#000 12%,#000 100%)}.hero-note{left:0;bottom:0}}
 .day-cell.is-red-day .day-number{color:#d65f45}.day-cell.is-blue-day .day-number{color:#3f70aa}.day-cell.is-today .day-number{color:#fff}
+.day-cell.is-outside-month{background:#f7f8f5}.day-cell.is-outside-month .day-number{opacity:.45}
 @media(min-width:701px){.hero h1{white-space:nowrap}}
 .calendar-section{max-width:none;width:100%;padding-left:0;padding-right:0}.calendar-heading{padding-left:5vw;padding-right:5vw}.calendar-grid{width:100%;border-left:0;border-right:0;border-radius:0}
 @media(max-width:700px){.calendar-section{padding-left:0;padding-right:0}.calendar-heading{padding-left:6vw;padding-right:6vw}}
@@ -163,7 +164,160 @@
 .is-past-day .calendar-event { filter: grayscale(.55); }
 .today-note { min-width: 0; }
 
+.mobile-calendar-view-switch,
+.calendar-summary { display: none; }
+
 @media (max-width: 700px) {
+  .mobile-calendar-view-switch {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    margin: 2px 4vw 16px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #eef1ec;
+  }
+  .mobile-calendar-view-switch button {
+    min-height: 40px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+  .mobile-calendar-view-switch button.is-active {
+    background: #fff;
+    color: var(--ink);
+    box-shadow: 0 3px 10px rgba(23,59,57,.09);
+  }
+  .platform-legend {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .platform-legend button {
+    min-height: 42px;
+    padding: 0 5px;
+    gap: 4px;
+    white-space: nowrap;
+  }
+  .platform-legend button i {
+    width: 9px;
+    height: 9px;
+    flex-basis: 9px;
+  }
+  .platform-legend button strong { font-size: 10px; }
+  .platform-legend button small {
+    padding: 2px 4px;
+    font-size: 7px;
+    letter-spacing: 0;
+  }
+  .calendar-grid.is-mobile-hidden { display: none; }
+  .calendar-summary.is-mobile-visible {
+    display: block;
+    margin: 0 4vw;
+  }
+  .calendar-summary-intro {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .calendar-summary-intro strong { color: var(--ink); font-size: 13px; }
+  .calendar-summary-intro span { text-align: right; }
+  .calendar-summary-grid {
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 10px 30px rgba(23,59,57,.05);
+  }
+  .calendar-summary-weekdays,
+  .calendar-summary-week {
+    display: grid;
+    grid-template-columns: repeat(var(--summary-columns), minmax(0, 1fr));
+  }
+  .calendar-summary-weekdays {
+    color: var(--ink);
+    background: #f1f5f0;
+  }
+  .calendar-summary-weekdays strong {
+    padding: 12px 8px;
+    border-right: 1px solid var(--line);
+    text-align: center;
+    font-size: 13px;
+  }
+  .calendar-summary-weekdays strong:last-child { border-right: 0; }
+  .calendar-summary-weekdays .is-saturday { color: #2964c8; }
+  .calendar-summary-weekdays .is-sunday { color: var(--orange); }
+  .calendar-summary-week { border-top: 1px solid var(--line); }
+  .calendar-summary-day {
+    min-width: 0;
+    min-height: 106px;
+    padding: 10px 8px 12px;
+    border-right: 1px solid var(--line);
+  }
+  .calendar-summary-day:last-child { border-right: 0; }
+  .calendar-summary-day.is-empty { background: #fafbf8; }
+  .calendar-summary-date {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    margin-bottom: 8px;
+  }
+  .calendar-summary-date strong { font-size: 22px; line-height: 1; }
+  .calendar-summary-date span { color: var(--muted); font-size: 10px; }
+  .calendar-summary-day.is-saturday .calendar-summary-date strong { color: #2964c8; }
+  .calendar-summary-day.is-sunday .calendar-summary-date strong { color: var(--orange); }
+  .calendar-summary-events { display: grid; gap: 6px; }
+  .calendar-summary-event {
+    display: block;
+    min-width: 0;
+    padding: 8px 7px 8px 9px;
+    border: 1px solid #e1e5df;
+    border-left: 4px solid var(--event-color);
+    border-radius: 8px;
+    background: #fff;
+  }
+  .calendar-summary-event small {
+    display: block;
+    margin-bottom: 3px;
+    color: var(--event-color);
+    font-size: 9px;
+    font-weight: 800;
+  }
+  .calendar-summary-event span {
+    display: block;
+    color: var(--ink);
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1.38;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+  .calendar-summary-note {
+    margin: 10px 2px 0;
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.5;
+  }
+  .calendar-summary-empty {
+    display: grid;
+    min-height: 150px;
+    place-items: center;
+    padding: 24px;
+    border: 1px dashed var(--line);
+    border-radius: 14px;
+    background: rgba(255,255,255,.62);
+    color: var(--muted);
+    text-align: center;
+    font-size: 13px;
+  }
   .hero h1 { white-space: nowrap; font-size: clamp(30px, 9vw, 42px); letter-spacing: -3px; line-height: 1.04; }
   .today-note { width: 100%; white-space: nowrap; font-size: 11px; line-height: 1.8; overflow: visible; }
   .event-card .event-poster { display: block; }
@@ -346,3 +500,5 @@
   .content { padding-left: 4vw; padding-right: 4vw; }
   .event-list { grid-template-columns: 1fr; }
 }
+
+.hero-art { background-image: var(--hero-image); }

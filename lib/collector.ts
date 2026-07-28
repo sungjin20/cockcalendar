@@ -6,6 +6,13 @@ type RecordItem = { title: string; sourceId: string; startDate: string | null; e
 export type CollectorLog = { id: string; platform: Platform; status: "success" | "partial" | "failed"; startedAt: string; durationMs: number; added: number; updated: number; unchanged: number; message: string; changes: { title: string; kind: "added" | "updated"; fields: string[] }[] };
 const WEKKUK_EXCLUDED_TITLE_PARTS = ["배드민턴 유청소년", "배드민턴 시니어", "배드민턴 성인부"];
 const isExcludedWekkukTitle = (title: string) => WEKKUK_EXCLUDED_TITLE_PARTS.some(part => title.includes(part));
+const WEKKUK_HEADERS = {
+  accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "accept-language": "ko-KR,ko;q=0.9,en;q=0.8",
+  "cache-control": "no-cache",
+  pragma: "no-cache",
+  "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0 Safari/537.36",
+};
 const logs: CollectorLog[] = [];
 export function getCollectorLogs(platform?: string) { return platform && platform !== "all" ? logs.filter(x => x.platform === platform) : logs; }
 function parseDate(value: string) { const m = value.match(/(20\d{2})[^\d]+(\d{1,2})[^\d]+(\d{1,2})/); return m ? `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}` : null; }
@@ -14,7 +21,10 @@ async function fetchText(url: string, headers: Record<string, string> = {}) {
   let lastError: unknown;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const response = await fetch(url, { headers, signal: AbortSignal.timeout(30000) });
+      const requestHeaders = url.startsWith("https://app2.wekkuk.com/")
+        ? { ...WEKKUK_HEADERS, ...headers }
+        : headers;
+      const response = await fetch(url, { headers: requestHeaders, signal: AbortSignal.timeout(30000) });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return response.text();
     } catch (error) {
