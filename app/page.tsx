@@ -20,7 +20,7 @@ export default function Home() {
   useEffect(() => setPage(1), [query, month, platform]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / 8)), currentPage = Math.min(page, pageCount), visible = filtered.slice((currentPage - 1) * 8, currentPage * 8);
   return <main>
-    <header className="site-header"><Link className="brand" href="/"><span>CockCalendar</span></Link><nav><a href="#calendar">대회 달력</a><a href="#competitions">대회 찾기</a><a href="#about">서비스 소개</a></nav><Link className="admin-link" href="/admin">관리자 <span>↗</span></Link></header>
+    <header className="site-header"><Link className="brand" href="/"><span>CockCalendar</span></Link><nav><a href="#calendar">대회 달력</a><a href="#competitions">대회 찾기</a><Link className="wekkuk-nav-link" href="/wekkuk">참가자 조회</Link><a href="#about">서비스 소개</a></nav><Link className="admin-link" href="/admin">관리자 <span>↗</span></Link></header>
     <section className="hero"><div className="hero-copy"><p className="eyebrow">BADMINTON EVENT FINDER</p><h1>다음 대회,<br /><em>여기서</em> 찾아보세요.</h1><p className="hero-description">여러 플랫폼의 배드민턴 대회 일정을 한곳에서 확인하고, 나에게 맞는 경기를 빠르게 찾아보세요.</p><a className="hero-link" href="#calendar">대회 일정 달력 보기 <span>↓</span></a></div><div className="hero-art" aria-hidden="true"><div className="sun" /><div className="court-line" /><div className="shuttle">✦</div><div className="hero-note">THIS WEEK <strong>{thisWeekCount}</strong> EVENTS</div></div></section>
     <CompetitionCalendar events={events} />
     <section className="content" id="competitions"><div className="section-heading"><div><p className="eyebrow">UPCOMING EVENTS</p><h2>다가오는 대회 <span>{filtered.length}</span></h2></div><p className="today-note">오늘 이후 개최되는 대회만 보여드려요.</p></div>
