@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { type MouseEvent, useEffect, useMemo, useState } from "react";
+import { readCalendarViewState, rememberMainScroll, writeCalendarViewState } from "../lib/main-view-state";
 import { platformColors, platformLabels } from "../lib/platform-theme";
 
 type Event = { id: string; title: string; startDate: string; endDate: string; platform: string };
@@ -24,6 +25,7 @@ export default function CompetitionCalendar({ events }: { events: Event[] }) {
   const [enabledPlatforms, setEnabledPlatforms] = useState<Set<string>>(() => new Set(platformOrder));
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [mobileView, setMobileView] = useState<"calendar" | "summary">("calendar");
+  const [calendarRestored, setCalendarRestored] = useState(false);
   const year = visibleMonth.getFullYear(), month = visibleMonth.getMonth();
   const years = Array.from({ length: 11 }, (_, index) => now.getFullYear() - 5 + index);
   const firstDay = new Date(year, month, 1).getDay(), daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -50,6 +52,31 @@ export default function CompetitionCalendar({ events }: { events: Event[] }) {
     return { date, key, isCurrentMonth: date.getMonth() === month };
   });
   const weeks = Array.from({ length: cells.length / 7 }, (_, index) => cells.slice(index * 7, index * 7 + 7));
+  useEffect(() => {
+    const saved = readCalendarViewState();
+    if (saved) {
+      // Session restoration intentionally hydrates the independent calendar controls together.
+      /* eslint-disable react-hooks/set-state-in-effect */
+      const restoredMonth = new Date(`${saved.visibleMonth}-01T00:00:00`);
+      if (!Number.isNaN(restoredMonth.getTime())) {
+        setVisibleMonth(new Date(restoredMonth.getFullYear(), restoredMonth.getMonth(), 1));
+        setFocusedDate(`${saved.visibleMonth}-01`);
+      }
+      const restoredPlatforms = saved.enabledPlatforms.filter(platform => platformOrder.includes(platform));
+      setEnabledPlatforms(new Set(restoredPlatforms));
+      setMobileView(saved.mobileView === "summary" ? "summary" : "calendar");
+      /* eslint-enable react-hooks/set-state-in-effect */
+    }
+    setCalendarRestored(true);
+  }, []);
+  useEffect(() => {
+    if (!calendarRestored) return;
+    writeCalendarViewState({
+      visibleMonth: `${year}-${String(month + 1).padStart(2, "0")}`,
+      enabledPlatforms: [...enabledPlatforms],
+      mobileView,
+    });
+  }, [calendarRestored, enabledPlatforms, mobileView, month, year]);
   const togglePlatform = (platform: string) => setEnabledPlatforms(current => {
     const next = new Set(current);
     if (next.has(platform)) next.delete(platform); else next.add(platform);
@@ -65,6 +92,10 @@ export default function CompetitionCalendar({ events }: { events: Event[] }) {
     const date = new Date(`${value}T00:00:00`);
     return new Intl.DateTimeFormat("ko-KR", { dateStyle: "full" }).format(date);
   };
+  const handleEventLinkClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    event.stopPropagation();
+    rememberMainScroll();
+  };
 
   return <section className="calendar-section" id="calendar" style={{ maxWidth: "none", width: "100%", margin: 0 }}>
     <div className="section-heading calendar-heading"><div><p className="eyebrow">EVENT CALENDAR</p><h2>{year}년 {month + 1}월</h2></div><div className="calendar-controls"><button type="button" className="calendar-nav" aria-label="이전 달" title="이전 달" onClick={() => moveMonth(-1)}>‹</button><select className="calendar-select" aria-label="연도 선택" value={year} onChange={event => { const next = new Date(Number(event.target.value), month, 1); setVisibleMonth(next); setFocusedDate(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-01`); }}>{years.map(value => <option key={value} value={value}>{value}년</option>)}</select><select className="calendar-select" aria-label="월 선택" value={month} onChange={event => { const next = new Date(year, Number(event.target.value), 1); setVisibleMonth(next); setFocusedDate(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-01`); }}>{Array.from({ length: 12 }, (_, value) => <option key={value} value={value}>{value + 1}월</option>)}</select><button type="button" className="calendar-today" onClick={() => { const date = new Date(`${today}T00:00:00`); setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1)); setFocusedDate(today); }}>오늘</button><button type="button" className="calendar-nav" aria-label="다음 달" title="다음 달" onClick={() => moveMonth(1)}>›</button></div></div>
@@ -77,7 +108,7 @@ export default function CompetitionCalendar({ events }: { events: Event[] }) {
       const dayEvents = visibleEventsByDay.get(key) || [];
       const weekday = index % 7;
       const tone = holidays.has(key) || weekday === 0 ? "is-red-day" : weekday === 6 ? "is-blue-day" : "";
-      return <div className={`day-cell ${isCurrentMonth ? "" : "is-outside-month"} ${key === today ? "is-today" : ""} ${key < today ? "is-past-day" : ""} ${tone} ${dayEvents.length ? "has-events" : ""}`} key={key} role="button" tabIndex={key === focusedDate ? 0 : -1} aria-label={`${key} 대회 ${dayEvents.length}개`} onFocus={() => setFocusedDate(key)} onClick={() => { setFocusedDate(key); setSelectedDate(key); }} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedDate(key); } }}><div className="day-number">{date.getDate()}</div><div className="day-event-count">{dayEvents.length ? `${dayEvents.length}개` : ""}</div>{dayEvents.slice(0, 2).map(event => <Link key={event.id} href={`/competitions/${event.id}`} title={event.title} data-platform={event.platform} style={{ background: platformColors[event.platform] || "var(--ink)" }} className="calendar-event" onClick={event => event.stopPropagation()}>{event.title}</Link>)}{dayEvents.length > 2 && <span className="more-events">+{dayEvents.length - 2}개 더보기</span>}</div>;
+      return <div className={`day-cell ${isCurrentMonth ? "" : "is-outside-month"} ${key === today ? "is-today" : ""} ${key < today ? "is-past-day" : ""} ${tone} ${dayEvents.length ? "has-events" : ""}`} key={key} role="button" tabIndex={key === focusedDate ? 0 : -1} aria-label={`${key} 대회 ${dayEvents.length}개`} onFocus={() => setFocusedDate(key)} onClick={() => { setFocusedDate(key); setSelectedDate(key); }} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedDate(key); } }}><div className="day-number">{date.getDate()}</div><div className="day-event-count">{dayEvents.length ? `${dayEvents.length}개` : ""}</div>{dayEvents.slice(0, 2).map(event => <Link key={event.id} href={`/competitions/${event.id}`} title={event.title} data-platform={event.platform} style={{ background: platformColors[event.platform] || "var(--ink)" }} className="calendar-event" onClick={handleEventLinkClick}>{event.title}</Link>)}{dayEvents.length > 2 && <span className="more-events">+{dayEvents.length - 2}개 더보기</span>}</div>;
     })}</div></div>
     <section className={`calendar-summary ${mobileView === "summary" ? "is-mobile-visible" : ""}`} aria-label={`${year}년 ${month + 1}월 대회 요약 달력`}>
       {summaryWeekdays.length > 0 ? <div className="calendar-summary-grid" style={{ "--summary-columns": summaryWeekdays.length } as React.CSSProperties}>
@@ -88,11 +119,11 @@ export default function CompetitionCalendar({ events }: { events: Event[] }) {
           const dayEvents = visibleEventsByDay.get(cell.key) || [];
           return <div className={`calendar-summary-day ${weekday === 0 ? "is-sunday" : weekday === 6 ? "is-saturday" : ""}`} key={weekday}>
             <div className="calendar-summary-date"><strong>{cell.date.getDate()}</strong></div>
-            <div className="calendar-summary-events">{dayEvents.map(event => <Link href={`/competitions/${event.id}`} className="calendar-summary-event" key={event.id} style={{ "--event-color": platformColors[event.platform] || "var(--ink)" } as React.CSSProperties}><small>{platformLabels[event.platform] || event.platform}</small><span>{event.title}</span></Link>)}</div>
+            <div className="calendar-summary-events">{dayEvents.map(event => <Link href={`/competitions/${event.id}`} className="calendar-summary-event" key={event.id} style={{ "--event-color": platformColors[event.platform] || "var(--ink)" } as React.CSSProperties} onClick={handleEventLinkClick}><small>{platformLabels[event.platform] || event.platform}</small><span>{event.title}</span></Link>)}</div>
           </div>;
         })}</div>)}
       </div> : <div className="calendar-summary-empty">현재 조건에 등록된 대회가 없습니다.</div>}
     </section>
-    {selectedDate && <div className="calendar-modal-backdrop" role="presentation" onClick={() => setSelectedDate(null)}><section className="calendar-modal" role="dialog" aria-modal="true" aria-labelledby="calendar-modal-title" onClick={event => event.stopPropagation()}><button className="calendar-modal-close" type="button" aria-label="팝업 닫기" onClick={() => setSelectedDate(null)}>×</button><p className="eyebrow">SELECTED DATE</p><h3 id="calendar-modal-title">{formatSelectedDate(selectedDate)}</h3>{selectedEvents.length ? <div className="calendar-modal-events">{selectedEvents.map(event => <Link key={event.id} href={`/competitions/${event.id}`} className="calendar-modal-event"><span style={{ background: platformColors[event.platform] || "var(--ink)" }} />{event.title}<b>›</b></Link>)}</div> : <p className="calendar-modal-empty">이 날짜에 열리는 대회가 없습니다.</p>}</section></div>}
+    {selectedDate && <div className="calendar-modal-backdrop" role="presentation" onClick={() => setSelectedDate(null)}><section className="calendar-modal" role="dialog" aria-modal="true" aria-labelledby="calendar-modal-title" onClick={event => event.stopPropagation()}><button className="calendar-modal-close" type="button" aria-label="팝업 닫기" onClick={() => setSelectedDate(null)}>×</button><p className="eyebrow">SELECTED DATE</p><h3 id="calendar-modal-title">{formatSelectedDate(selectedDate)}</h3>{selectedEvents.length ? <div className="calendar-modal-events">{selectedEvents.map(event => <Link key={event.id} href={`/competitions/${event.id}`} className="calendar-modal-event" onClick={handleEventLinkClick}><span style={{ background: platformColors[event.platform] || "var(--ink)" }} />{event.title}<b>›</b></Link>)}</div> : <p className="calendar-modal-empty">이 날짜에 열리는 대회가 없습니다.</p>}</section></div>}
   </section>;
 }
