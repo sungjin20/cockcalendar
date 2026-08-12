@@ -4,30 +4,36 @@ import Link from "next/link";
 import { type MouseEvent, useEffect, useMemo, useState } from "react";
 import { readCalendarViewState, rememberMainScroll, writeCalendarViewState } from "../lib/main-view-state";
 import { platformColors, platformLabels } from "../lib/platform-theme";
+import { appUrl } from "../lib/url-prefix";
 
 type Event = { id: string; title: string; startDate: string; endDate: string; platform: string };
 const holidays = new Set(["2026-01-01", "2026-02-16", "2026-02-17", "2026-02-18", "2026-03-01", "2026-03-02", "2026-05-05", "2026-05-24", "2026-05-25", "2026-06-03", "2026-06-06", "2026-08-15", "2026-08-17", "2026-09-24", "2026-09-25", "2026-09-26", "2026-10-03", "2026-10-05", "2026-10-09", "2026-12-25"]);
 const platformOrder = ["baddy", "sponet", "wekkuk", "facecock"];
 const weekdayLabels = ["일", "월", "화", "수", "목", "금", "토"];
 const summaryWeekdays = [0, 6];
+const getSeoulToday = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+const getInitialMonth = (today: string) => {
+  const seoulToday = new Date(`${today}T00:00:00`);
+  const endOfWeek = new Date(seoulToday);
+  endOfWeek.setDate(seoulToday.getDate() + (6 - seoulToday.getDay()));
+  const initialMonth = endOfWeek.getMonth() !== seoulToday.getMonth() ? endOfWeek : seoulToday;
+  return new Date(initialMonth.getFullYear(), initialMonth.getMonth(), 1);
+};
 
-export default function CompetitionCalendar({ events }: { events: Event[] }) {
-  const now = new Date();
-  const today = now.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
-  const [visibleMonth, setVisibleMonth] = useState(() => {
-    const seoulToday = new Date(`${today}T00:00:00`);
-    const endOfWeek = new Date(seoulToday);
-    endOfWeek.setDate(seoulToday.getDate() + (6 - seoulToday.getDay()));
-    const initialMonth = endOfWeek.getMonth() !== seoulToday.getMonth() ? endOfWeek : seoulToday;
-    return new Date(initialMonth.getFullYear(), initialMonth.getMonth(), 1);
-  });
-  const [focusedDate, setFocusedDate] = useState(today);
+export default function CompetitionCalendar() {
+  // Keep time-dependent highlighting out of prerendered HTML. Otherwise the date
+  // at deployment can remain marked as today for the lifetime of the page cache.
+  const [today, setToday] = useState("");
+  const [events, setEvents] = useState<Event[]>([]);
+  const [visibleMonth, setVisibleMonth] = useState(() => getInitialMonth(getSeoulToday()));
+  const [focusedDate, setFocusedDate] = useState("");
   const [enabledPlatforms, setEnabledPlatforms] = useState<Set<string>>(() => new Set(platformOrder));
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [mobileView, setMobileView] = useState<"calendar" | "summary">("calendar");
   const [calendarRestored, setCalendarRestored] = useState(false);
   const year = visibleMonth.getFullYear(), month = visibleMonth.getMonth();
-  const years = Array.from({ length: 11 }, (_, index) => now.getFullYear() - 5 + index);
+  const currentYear = today ? Number(today.slice(0, 4)) : visibleMonth.getFullYear();
+  const years = Array.from({ length: 11 }, (_, index) => currentYear - 5 + index);
   const firstDay = new Date(year, month, 1).getDay(), daysInMonth = new Date(year, month + 1, 0).getDate();
   const eventsByDay = useMemo(() => {
     const map = new Map<string, Event[]>();
@@ -52,11 +58,24 @@ export default function CompetitionCalendar({ events }: { events: Event[] }) {
     return { date, key, isCurrentMonth: date.getMonth() === month };
   });
   const weeks = Array.from({ length: cells.length / 7 }, (_, index) => cells.slice(index * 7, index * 7 + 7));
+  const calendarFrom = cells[0]?.key;
+  const calendarTo = cells.at(-1)?.key;
   useEffect(() => {
+    const controller = new AbortController();
+    if (calendarFrom && calendarTo) fetch(appUrl(`/api/competitions?includePast=true&from=${calendarFrom}&to=${calendarTo}&limit=500`), { signal: controller.signal })
+      .then(response => response.json())
+      .then(body => setEvents(body.data || []))
+      .catch(error => { if (error.name !== "AbortError") setEvents([]); });
+    return () => controller.abort();
+  }, [calendarFrom, calendarTo]);
+  useEffect(() => {
+    // Client-only initialization deliberately replaces values omitted from prerendered HTML.
+    /* eslint-disable react-hooks/set-state-in-effect */
+    const clientToday = getSeoulToday();
+    setToday(clientToday);
     const saved = readCalendarViewState();
     if (saved) {
       // Session restoration intentionally hydrates the independent calendar controls together.
-      /* eslint-disable react-hooks/set-state-in-effect */
       const restoredMonth = new Date(`${saved.visibleMonth}-01T00:00:00`);
       if (!Number.isNaN(restoredMonth.getTime())) {
         setVisibleMonth(new Date(restoredMonth.getFullYear(), restoredMonth.getMonth(), 1));
@@ -65,9 +84,12 @@ export default function CompetitionCalendar({ events }: { events: Event[] }) {
       const restoredPlatforms = saved.enabledPlatforms.filter(platform => platformOrder.includes(platform));
       setEnabledPlatforms(new Set(restoredPlatforms));
       setMobileView(saved.mobileView === "summary" ? "summary" : "calendar");
-      /* eslint-enable react-hooks/set-state-in-effect */
+    } else {
+      setVisibleMonth(getInitialMonth(clientToday));
+      setFocusedDate(clientToday);
     }
     setCalendarRestored(true);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
   useEffect(() => {
     if (!calendarRestored) return;

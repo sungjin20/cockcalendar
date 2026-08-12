@@ -516,3 +516,38 @@
   cursor: pointer;
 }
 .search-clear:hover { background: var(--mint); color: var(--ink); }
+
+/* De-emphasize completed dates while keeping their events available. */
+.day-cell.is-past-day { opacity: .3; background: #f6f7f3; }
+.day-cell.is-past-day .calendar-event { filter: grayscale(.72) saturate(.45); }
+
+/* Reserve the same poster footprint for events whose source has no artwork. */
+.event-poster-placeholder {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: linear-gradient(145deg, #edf3ed, #f8f6ef) !important;
+  color: #8b9b94;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .8px;
+  text-align: center;
+}
+
+/* Keep long competition names balanced with the poster and metadata. */
+.detail-intro h1 {
+  max-width: 680px;
+  margin: 16px 0 28px;
+  font-size: clamp(32px, 3.2vw, 48px);
+  line-height: 1.14;
+  letter-spacing: -2px;
+  word-break: keep-all;
+}
+@media (max-width: 700px) {
+  .detail-intro h1 {
+    font-size: clamp(28px, 8vw, 36px);
+    line-height: 1.18;
+    letter-spacing: -1.4px;
+  }
+}
