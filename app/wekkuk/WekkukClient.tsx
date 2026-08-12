@@ -20,6 +20,10 @@ export type Player = {
   ply2_tShirt?: string;
 };
 
+type ContestOptions = { categories: Record<string, { ages: Record<string, string[]> }> };
+const CUSTOM_VALUE = "__custom__";
+const sexPlayLabel: Record<string, string> = { BD: "혼복", MD: "남복", FD: "여복", MS: "남단", FS: "여단" };
+
 export default function WekkukClient({
   initialContests,
   initialTotalPages,
@@ -50,6 +54,12 @@ export default function WekkukClient({
   const [sexPlay, setSexPlay] = useState("BD");
   const [age, setAge] = useState("");
   const [level, setLevel] = useState("");
+  const [sexPlaySelection, setSexPlaySelection] = useState(CUSTOM_VALUE);
+  const [ageSelection, setAgeSelection] = useState(CUSTOM_VALUE);
+  const [levelSelection, setLevelSelection] = useState(CUSTOM_VALUE);
+  const [contestOptions, setContestOptions] = useState<ContestOptions>({ categories: {} });
+  const [optionsBusy, setOptionsBusy] = useState(false);
+  const [optionsMessage, setOptionsMessage] = useState("");
   const [affiliation, setAffiliation] = useState("");
   const [playerName, setPlayerName] = useState("");
   const [players, setPlayers] = useState<Player[]>(initialPlayers);
@@ -62,6 +72,59 @@ export default function WekkukClient({
     }, 0);
     return () => window.clearTimeout(timer);
   }, [initialLoggedIn]);
+
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- reset dependent form state when the selected contest/session changes */
+    if (!selected || !token) {
+      setContestOptions({ categories: {} });
+      setSexPlaySelection(CUSTOM_VALUE);
+      setAgeSelection(CUSTOM_VALUE);
+      setLevelSelection(CUSTOM_VALUE);
+      setSexPlay("");
+      setAge("");
+      setLevel("");
+      setOptionsBusy(false);
+      setOptionsMessage(selected ? "종목 정보를 불러오려면 먼저 로그인해 주세요." : "");
+      return;
+    }
+    const controller = new AbortController();
+    setOptionsBusy(true);
+    setOptionsMessage("");
+    fetch(appUrl("/api/wekkuk/options"), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(token !== "cookie-session" ? { authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ bct_id: selected.id }),
+      signal: controller.signal,
+    }).then(async response => {
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      const options = data as ContestOptions;
+      setContestOptions(options);
+      const firstSexPlay = Object.keys(options.categories)[0] || "";
+      const firstAge = Object.keys(options.categories[firstSexPlay]?.ages || {})[0] || "";
+      const firstLevel = options.categories[firstSexPlay]?.ages[firstAge]?.[0] || "";
+      setSexPlaySelection(firstSexPlay || CUSTOM_VALUE);
+      setAgeSelection(firstAge || CUSTOM_VALUE);
+      setLevelSelection(firstLevel || CUSTOM_VALUE);
+      setSexPlay(firstSexPlay);
+      setAge(firstAge);
+      setLevel(firstLevel);
+      setOptionsMessage(firstSexPlay || firstAge || firstLevel ? "선택한 대회의 종목 정보를 불러왔습니다." : "등록된 종목 정보가 없어 직접입력을 사용해 주세요.");
+    }).catch(error => {
+      if (error.name !== "AbortError") {
+        setContestOptions({ categories: {} });
+        setSexPlaySelection(CUSTOM_VALUE);
+        setAgeSelection(CUSTOM_VALUE);
+        setLevelSelection(CUSTOM_VALUE);
+        setOptionsMessage(error instanceof Error ? error.message : "종목 정보를 불러오지 못했습니다.");
+      }
+    }).finally(() => { if (!controller.signal.aborted) setOptionsBusy(false); });
+    return () => controller.abort();
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [selected, token]);
 
   async function login(event: FormEvent) {
     event.preventDefault();
@@ -139,6 +202,27 @@ export default function WekkukClient({
     }
   }
 
+  const sexPlayOptions = Object.keys(contestOptions.categories);
+  const ageOptions = sexPlaySelection === CUSTOM_VALUE ? [] : Object.keys(contestOptions.categories[sexPlaySelection]?.ages || {});
+  const levelOptions = sexPlaySelection === CUSTOM_VALUE || ageSelection === CUSTOM_VALUE ? [] : contestOptions.categories[sexPlaySelection]?.ages[ageSelection] || [];
+  function changeSexPlay(value: string) {
+    setSexPlaySelection(value);
+    setSexPlay(value === CUSTOM_VALUE ? "" : value);
+    const nextAge = value === CUSTOM_VALUE ? "" : Object.keys(contestOptions.categories[value]?.ages || {})[0] || "";
+    const nextLevel = nextAge ? contestOptions.categories[value].ages[nextAge]?.[0] || "" : "";
+    setAgeSelection(nextAge || CUSTOM_VALUE);
+    setAge(nextAge);
+    setLevelSelection(nextLevel || CUSTOM_VALUE);
+    setLevel(nextLevel);
+  }
+  function changeAge(value: string) {
+    setAgeSelection(value);
+    setAge(value === CUSTOM_VALUE ? "" : value);
+    const nextLevel = value === CUSTOM_VALUE || sexPlaySelection === CUSTOM_VALUE ? "" : contestOptions.categories[sexPlaySelection]?.ages[value]?.[0] || "";
+    setLevelSelection(nextLevel || CUSTOM_VALUE);
+    setLevel(nextLevel);
+  }
+
   return <main className="wk-page">
     <div className="hero">
       <h1>배드민턴 참가자 조회</h1>
@@ -198,14 +282,16 @@ export default function WekkukClient({
           <div className="form-body">
             <form action={appUrl("/wekkuk")} method="get" onSubmit={searchPlayers}>
               <input type="hidden" name="search" value="1" /><input type="hidden" name="page" value={page} /><input type="hidden" name="contest" value={selected?.id || ""} />
+              <input type="hidden" name="tem_sex_play" value={sexPlay} /><input type="hidden" name="tem_age" value={age} /><input type="hidden" name="tem_level" value={level} />
               <div className="grid">
                 <div><label>선택된 대회 ID</label><input value={selected?.id || ""} placeholder="대회를 선택하면 자동으로 채워집니다." readOnly /></div>
-                <div><label>복식 구분</label><select name="tem_sex_play" value={sexPlay} onChange={(event) => setSexPlay(event.target.value)}><option value="BD">혼복</option><option value="MD">남복</option><option value="FD">여복</option></select></div>
-                <div><label>연령대</label><input name="tem_age" value={age} onChange={(event) => setAge(event.target.value)} placeholder="예: 2030" /></div>
-                <div><label>등급</label><input name="tem_level" value={level} onChange={(event) => setLevel(event.target.value)} placeholder="예: B" /></div>
+                <div className="option-field"><label>종목</label><select value={sexPlaySelection} disabled={optionsBusy} onChange={(event) => changeSexPlay(event.target.value)}>{sexPlayOptions.map(value => <option value={value} key={value}>{sexPlayLabel[value] || value}</option>)}<option value={CUSTOM_VALUE}>직접입력</option></select>{sexPlaySelection === CUSTOM_VALUE && <input value={sexPlay} onChange={(event) => setSexPlay(event.target.value)} placeholder="예: 남복 또는 MD" />}</div>
+                <div className="option-field"><label>연령대</label><select value={ageSelection} disabled={optionsBusy || sexPlaySelection === CUSTOM_VALUE} onChange={(event) => changeAge(event.target.value)}>{ageOptions.map(value => <option value={value} key={value}>{value}</option>)}<option value={CUSTOM_VALUE}>직접입력</option></select>{ageSelection === CUSTOM_VALUE && <input value={age} onChange={(event) => setAge(event.target.value)} placeholder="예: 2030" />}</div>
+                <div className="option-field"><label>등급</label><select value={levelSelection} disabled={optionsBusy || ageSelection === CUSTOM_VALUE} onChange={(event) => { const value = event.target.value; setLevelSelection(value); setLevel(value === CUSTOM_VALUE ? "" : value); }}>{levelOptions.map(value => <option value={value} key={value}>{value}</option>)}<option value={CUSTOM_VALUE}>직접입력</option></select>{levelSelection === CUSTOM_VALUE && <input value={level} onChange={(event) => setLevel(event.target.value)} placeholder="예: B" />}</div>
                 <div><label>소속</label><input name="ply_affiliation" value={affiliation} onChange={(event) => setAffiliation(event.target.value)} placeholder="예: DNA" /></div>
                 <div><label>선수명</label><input name="ply_name" value={playerName} onChange={(event) => setPlayerName(event.target.value)} placeholder="예: 홍길동" /></div>
               </div>
+              {selected && <div className="status">{optionsBusy ? "선택한 대회의 종목 정보를 불러오는 중입니다…" : optionsMessage}</div>}
               <div className="btn-row form-actions"><button className="btn btn-primary" disabled={searchBusy || !selected}>{searchBusy ? "조회 중…" : "조회"}</button></div>
             </form>
             {searchMessage && <div className="status success">{searchMessage}</div>}

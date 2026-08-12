@@ -195,6 +195,7 @@
   box-shadow: 0 0 0 4px rgba(83, 139, 113, .12);
 }
 .wk-page input[readonly] { background: #f0f2ee; color: var(--wk-muted); }
+.wk-page .option-field input { margin-top: 8px; }
 .wk-page .form-actions { margin-top: 18px; }
 .wk-page .login-complete {
   display: flex;
