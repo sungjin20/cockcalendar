@@ -520,6 +520,8 @@
 /* De-emphasize completed dates while keeping their events available. */
 .day-cell.is-past-day { opacity: .3; background: #f6f7f3; }
 .day-cell.is-past-day .calendar-event { filter: grayscale(.72) saturate(.45); }
+.calendar-summary-day.is-past-day { opacity: .3; background: #f6f7f3; }
+.calendar-summary-day.is-past-day .calendar-summary-event { filter: grayscale(.72) saturate(.45); }
 
 /* Reserve the same poster footprint for events whose source has no artwork. */
 .event-poster-placeholder {

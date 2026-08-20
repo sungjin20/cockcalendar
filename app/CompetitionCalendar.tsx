@@ -139,7 +139,7 @@ export default function CompetitionCalendar() {
           const cell = week.find(({ date }) => date.getDay() === weekday);
           if (!cell || !cell.isCurrentMonth) return <div className="calendar-summary-day is-empty" key={weekday} aria-hidden="true" />;
           const dayEvents = visibleEventsByDay.get(cell.key) || [];
-          return <div className={`calendar-summary-day ${weekday === 0 ? "is-sunday" : weekday === 6 ? "is-saturday" : ""}`} key={weekday}>
+          return <div className={`calendar-summary-day ${cell.key < today ? "is-past-day" : ""} ${weekday === 0 ? "is-sunday" : weekday === 6 ? "is-saturday" : ""}`} key={weekday}>
             <div className="calendar-summary-date"><strong>{cell.date.getDate()}</strong></div>
             <div className="calendar-summary-events">{dayEvents.map(event => <Link href={`/competitions/${event.id}`} className="calendar-summary-event" key={event.id} style={{ "--event-color": platformColors[event.platform] || "var(--ink)" } as React.CSSProperties} onClick={handleEventLinkClick}><small>{platformLabels[event.platform] || event.platform}</small><span>{event.title}</span></Link>)}</div>
           </div>;
