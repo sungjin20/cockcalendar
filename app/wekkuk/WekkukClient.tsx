@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { appUrl } from "../../lib/url-prefix";
 import type { WekkukContest } from "../../lib/wekkuk";
+import TeamSummary from "./TeamSummary";
 
 export type Player = {
   sex_play?: string;
@@ -58,6 +59,7 @@ export default function WekkukClient({
   const [ageSelection, setAgeSelection] = useState(CUSTOM_VALUE);
   const [levelSelection, setLevelSelection] = useState(CUSTOM_VALUE);
   const [contestOptions, setContestOptions] = useState<ContestOptions>({ categories: {} });
+  const [optionsOwner, setOptionsOwner] = useState("");
   const [optionsBusy, setOptionsBusy] = useState(false);
   const [optionsMessage, setOptionsMessage] = useState("");
   const [affiliation, setAffiliation] = useState("");
@@ -88,6 +90,7 @@ export default function WekkukClient({
       return;
     }
     const controller = new AbortController();
+    setContestOptions({ categories: {} });
     setOptionsBusy(true);
     setOptionsMessage("");
     fetch(appUrl("/api/wekkuk/options"), {
@@ -100,9 +103,11 @@ export default function WekkukClient({
       signal: controller.signal,
     }).then(async response => {
       const data = await response.json();
+      if (controller.signal.aborted) return;
       if (!response.ok) throw new Error(data.error);
       const options = data as ContestOptions;
       setContestOptions(options);
+      setOptionsOwner(`${selected.id}-${token}`);
       const firstSexPlay = Object.keys(options.categories)[0] || "";
       const firstAge = Object.keys(options.categories[firstSexPlay]?.ages || {})[0] || "";
       const firstLevel = options.categories[firstSexPlay]?.ages[firstAge]?.[0] || "";
@@ -276,6 +281,8 @@ export default function WekkukClient({
               : <div className="selected-empty">아직 선택된 대회가 없습니다. 좌측 목록에서 대회를 선택해 주세요.</div>}
           </div>
         </section>
+
+        {selected && token && optionsOwner === `${selected.id}-${token}` && !optionsBusy && Object.keys(contestOptions.categories).length > 0 && <TeamSummary key={`${selected.id}-${token}`} contestId={selected.id} token={token} options={contestOptions} />}
 
         <section className="panel">
           <div className="panel-head"><h3>참가자 조회</h3><p>선택한 대회의 ID를 사용해 참가자 목록을 조회합니다.</p></div>

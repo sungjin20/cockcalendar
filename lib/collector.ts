@@ -1,11 +1,10 @@
 import { dbQuery } from "../db/postgres";
 import { getBaddyAccessToken, refreshBaddyAccessToken } from "./baddy-auth";
+import { isExcludedWekkukTitle } from "./wekkuk-filters";
 
 export type Platform = "baddy" | "wekkuk" | "sponet" | "facecock";
 type RecordItem = { title: string; sourceId: string; startDate: string | null; endDate?: string | null; venue?: string; region?: string; organizer?: string; supervisor?: string; sponsor?: string; description?: string; posterUrl?: string; posterUrls?: string[]; officialUrl?: string; sourceUrl?: string; metadata?: Record<string, unknown>; excluded?: boolean };
 export type CollectorLog = { id: string; platform: Platform; status: "success" | "partial" | "failed"; startedAt: string; durationMs: number; added: number; updated: number; unchanged: number; message: string; changes: { title: string; kind: "added" | "updated"; fields: string[] }[] };
-const WEKKUK_EXCLUDED_TITLE_PARTS = ["배드민턴 유청소년", "배드민턴 시니어", "배드민턴 성인부"];
-const isExcludedWekkukTitle = (title: string) => WEKKUK_EXCLUDED_TITLE_PARTS.some(part => title.includes(part));
 const WEKKUK_HEADERS = {
   accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
   "accept-language": "ko-KR,ko;q=0.9,en;q=0.8",

@@ -1,3 +1,5 @@
+import { isExcludedWekkukOrganizer, isExcludedWekkukTitle } from "./wekkuk-filters";
+
 const WEKKUK_BASE = "https://app2.wekkuk.com/v2";
 export const WEKKUK_USER_AGENT = "Mozilla/5.0 Android Wekkuk";
 
@@ -68,7 +70,11 @@ export async function getWekkukContests(page = 1) {
     1,
     ...[...html.matchAll(/toPage\('(\d+)'/g)].map((match) => Number(match[1])),
   );
-  return { page, totalPages, items };
+  return {
+    page,
+    totalPages,
+    items: items.filter(item => !isExcludedWekkukOrganizer(item.organizer) && !isExcludedWekkukTitle(item.name)),
+  };
 }
 
 export async function loginWekkuk(uid: string, password: string) {

@@ -302,3 +302,10 @@
   .wk-page .btn { min-height: 40px; padding: 0 13px; }
   .wk-page table { min-width: 920px; }
 }
+.wk-page .team-summary-totals { display: flex; flex-wrap: wrap; gap: 12px; }
+.wk-page .team-summary-totals > div { padding: 12px 16px; border: 1px solid #d9dfd8; border-radius: 8px; }
+.wk-page .team-summary-totals span { display: block; font-size: 12px; }
+.wk-page .team-summary-totals strong { display: block; margin-top: 6px; font-size: 24px; }
+.wk-page .team-summary-table { overflow-x: auto; margin-top: 16px; }
+.wk-page .team-summary-table table { width: 100%; min-width: 0; }
+.wk-page .team-summary-table caption { text-align: left; padding-bottom: 8px; }
