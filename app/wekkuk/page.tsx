@@ -23,6 +23,7 @@ export default async function Page({
   let initialContests: WekkukContest[] = [];
   let initialTotalPages = 1;
   let initialPage = 1;
+  let initialListMessage = "";
   let initialPlayers: Player[] = [];
   let initialSearchMessage = "";
   try {
@@ -30,7 +31,10 @@ export default async function Page({
     initialContests = data.items;
     initialTotalPages = data.totalPages;
     initialPage = data.page;
-  } catch {}
+    initialListMessage = data.warning;
+  } catch (error) {
+    initialListMessage = error instanceof Error ? error.message : "대회 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
+  }
   const initialSelected = initialContests.find((contest) => contest.id === value(params.contest)) || null;
   if (value(params.search) === "1") {
     if (!token) initialSearchMessage = "먼저 Wekkuk 계정으로 로그인해 주세요.";
@@ -64,6 +68,7 @@ export default async function Page({
   }
   return <WekkukClient
     initialContests={initialContests}
+    initialListMessage={initialListMessage}
     initialTotalPages={initialTotalPages}
     initialLoggedIn={loggedIn}
     initialPage={initialPage}

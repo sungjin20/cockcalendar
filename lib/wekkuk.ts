@@ -73,32 +73,55 @@ function parseContestPage(html: string) {
 const CONTEST_PAGE_SIZE = 10;
 let contestCache: { items: WekkukContest[]; expires: number } | undefined;
 let contestRequest: Promise<WekkukContest[]> | undefined;
+let contestRetryAfter = 0;
+let contestError = "";
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function loadAllContests() {
   async function fetchPage(page: number) {
-    const response = await wekkukFetch(`/contest_badminton/contest?page=${page}`);
-    if (!response.ok) throw new Error("대회 목록을 불러오지 못했습니다.");
-    return parseContestPage(await response.text());
+    for (let attempt = 0; attempt < 4; attempt++) {
+      await wait(1000);
+      const response = await wekkukFetch(`/contest_badminton/contest?page=${page}`);
+      if (response.ok) return parseContestPage(await response.text());
+      if (response.status !== 429) throw new Error("위꾹 대회 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      const retryAfter = response.headers.get("retry-after");
+      await response.body?.cancel();
+      const delay = retryAfter && /^\d+$/.test(retryAfter) ? Number(retryAfter) * 1000 : retryAfter ? Date.parse(retryAfter) - Date.now() : 0;
+      const backoff = Math.max(Number.isFinite(delay) ? delay : 0, 5000 * 2 ** attempt);
+      if (attempt === 3 || backoff > 30000) {
+        contestRetryAfter = Date.now() + Math.max(backoff, 60000);
+        throw new Error("위꾹 서버의 요청 제한으로 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      }
+      await wait(backoff);
+    }
+    throw new Error("대회 목록을 불러오지 못했습니다.");
   }
   const first = await fetchPage(1);
   const pages: WekkukContest[][] = [first.items];
-  let next = 2;
-  await Promise.all(Array.from({ length: Math.min(3, first.totalPages - 1) }, async () => {
-    while (next <= first.totalPages) {
-      const page = next++;
-      pages[page - 1] = (await fetchPage(page)).items;
-    }
-  }));
+  for (let page = 2; page <= first.totalPages; page++) {
+    pages[page - 1] = (await fetchPage(page)).items;
+  }
   return [...new Map(pages.flat().map(item => [item.id, item])).values()];
 }
 
 export async function getWekkukContests(page = 1) {
   if (!contestCache || contestCache.expires <= Date.now()) {
-    contestRequest ??= loadAllContests().then(items => {
-      contestCache = { items, expires: Date.now() + 5 * 60 * 1000 };
-      return items;
-    }).finally(() => { contestRequest = undefined; });
-    await contestRequest;
+    if (Date.now() >= contestRetryAfter) {
+      contestRequest ??= loadAllContests().then(items => {
+        contestCache = { items, expires: Date.now() + 30 * 60 * 1000 };
+        contestError = "";
+        return items;
+      }).catch(error => {
+        contestRetryAfter = Math.max(contestRetryAfter, Date.now() + 60000);
+        contestError = error instanceof Error ? error.message : "대회 목록을 불러오지 못했습니다.";
+        throw error;
+      }).finally(() => { contestRequest = undefined; });
+      // Serve the previous complete list while refreshing it in the background.
+      if (contestCache) void contestRequest.catch(() => {});
+      else await contestRequest;
+    } else if (!contestCache) {
+      throw new Error(contestError || "잠시 후 대회 목록을 다시 조회해 주세요.");
+    }
   }
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   const items = (contestCache?.items || []).filter(item => {
@@ -108,7 +131,7 @@ export async function getWekkukContests(page = 1) {
   });
   const totalPages = Math.max(1, Math.ceil(items.length / CONTEST_PAGE_SIZE));
   const currentPage = Math.min(totalPages, Math.max(1, Number.isFinite(page) ? Math.floor(page) : 1));
-  return { page: currentPage, totalPages, items: items.slice((currentPage - 1) * CONTEST_PAGE_SIZE, currentPage * CONTEST_PAGE_SIZE) };
+  return { page: currentPage, totalPages, warning: contestCache && contestCache.expires <= Date.now() ? "목록 갱신 중이거나 지연되어 이전 조회 결과를 표시합니다." : "", items: items.slice((currentPage - 1) * CONTEST_PAGE_SIZE, currentPage * CONTEST_PAGE_SIZE) };
 }
 
 export async function loginWekkuk(uid: string, password: string) {

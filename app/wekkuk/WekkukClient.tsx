@@ -27,6 +27,7 @@ const sexPlayLabel: Record<string, string> = { BD: "혼복", MD: "남복", FD: "
 
 export default function WekkukClient({
   initialContests,
+  initialListMessage,
   initialTotalPages,
   initialLoggedIn,
   initialPage,
@@ -35,6 +36,7 @@ export default function WekkukClient({
   initialSearchMessage,
 }: {
   initialContests: WekkukContest[];
+  initialListMessage: string;
   initialTotalPages: number;
   initialLoggedIn: boolean;
   initialPage: number;
@@ -238,7 +240,7 @@ export default function WekkukClient({
       <aside className="panel contest-sidebar">
         <div className="panel-head"><h2>대회 목록</h2><p>Wekkuk 대회 리스트에서 조회할 대회를 선택하세요.</p></div>
         <div className="contest-list-wrap">
-          <div className="contest-list-status">{listBusy ? "목록을 불러오는 중입니다…" : `${contests.length}개의 대회를 불러왔습니다.`}</div>
+            <div className="contest-list-status" role="status">{initialListMessage || (listBusy ? "목록을 불러오는 중입니다…" : `${contests.length}개의 대회를 불러왔습니다.`)}{initialListMessage && <button type="button" className="btn btn-secondary" onClick={() => window.location.reload()}>다시 시도</button>}</div>
           <div className="contest-list">
             {contests.map((contest) => <a href={`${appUrl("/wekkuk")}?page=${page}&contest=${contest.id}`} key={contest.id} className={`contest-card ${selected?.id === contest.id ? "active" : ""}`} onClick={() => setSelected(contest)}>
               <div className="contest-card-meta">{contest.status && <span className="contest-badge">{contest.status}</span>}<span>{contest.date}</span></div>
