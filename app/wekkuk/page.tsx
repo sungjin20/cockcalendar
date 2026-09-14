@@ -22,12 +22,14 @@ export default async function Page({
   const requestedPage = Math.max(1, Number(value(params.page)) || 1);
   let initialContests: WekkukContest[] = [];
   let initialTotalPages = 1;
+  let initialPage = 1;
   let initialPlayers: Player[] = [];
   let initialSearchMessage = "";
   try {
     const data = await getWekkukContests(requestedPage);
     initialContests = data.items;
     initialTotalPages = data.totalPages;
+    initialPage = data.page;
   } catch {}
   const initialSelected = initialContests.find((contest) => contest.id === value(params.contest)) || null;
   if (value(params.search) === "1") {
@@ -64,7 +66,7 @@ export default async function Page({
     initialContests={initialContests}
     initialTotalPages={initialTotalPages}
     initialLoggedIn={loggedIn}
-    initialPage={requestedPage}
+    initialPage={initialPage}
     initialSelected={initialSelected}
     initialPlayers={initialPlayers}
     initialSearchMessage={initialSearchMessage}
