@@ -76,6 +76,9 @@ jobs:
           install -m 0644 docker-compose.prod.yml Caddyfile /opt/cockcalendar/release/
           install -m 0644 db/schema.sql /opt/cockcalendar/release/db/schema.sql
 
+      - name: Remove unused images before pulling
+        run: docker image prune -a -f
+
       - name: Pull images and restart services
         env:
           WEB_IMAGE: ${{ env.WEB_IMAGE }}:${{ github.sha }}
@@ -84,7 +87,6 @@ jobs:
           cd /opt/cockcalendar/release
           docker compose --env-file /opt/cockcalendar/.env -f docker-compose.prod.yml pull
           docker compose --env-file /opt/cockcalendar/.env -f docker-compose.prod.yml up -d --no-build --remove-orphans
-          docker image prune -f
 
       - name: Verify production
         run: |
@@ -102,3 +104,6 @@ jobs:
             sleep 5
           done
           exit 1
+
+      - name: Remove unused images after successful deployment
+        run: docker image prune -a -f
