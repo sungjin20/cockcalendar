@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { appUrl } from "../../lib/url-prefix";
 
 type Options = { categories: Record<string, { ages: Record<string, string[]> }> };
@@ -12,6 +12,8 @@ export default function TeamSummary({ contestId, token, options }: { contestId: 
   const [busy, setBusy] = useState(true);
   const [attempt, setAttempt] = useState(0);
   const [message, setMessage] = useState("");
+  const successful = useRef(new Map<string, number>());
+  const cooldown = useRef(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -19,21 +21,48 @@ export default function TeamSummary({ contestId, token, options }: { contestId: 
       Object.entries(value.ages).flatMap(([age, levels]) => [...new Set(levels)].map(level => ({ category, age, level }))));
     let next = 0;
     let expired = false;
+    const keyOf = (row: Row) => JSON.stringify([contestId, token, row.category, row.age, row.level]);
+    const sleep = (ms: number) => new Promise<void>((resolve, reject) => {
+      if (controller.signal.aborted) { reject(new DOMException("Aborted", "AbortError")); return; }
+      const abort = () => { clearTimeout(timer); reject(new DOMException("Aborted", "AbortError")); };
+      const timer = setTimeout(() => { controller.signal.removeEventListener("abort", abort); resolve(); }, ms);
+      controller.signal.addEventListener("abort", abort, { once: true });
+    });
     async function run() {
-      setRows(combinations);
+      setRows(combinations.map(row => ({ ...row, count: successful.current.get(keyOf(row)) })));
       setBusy(true);
       setMessage("");
       async function worker() {
         while (next < combinations.length && !controller.signal.aborted && !expired) {
           const index = next++;
           const row = combinations[index];
+          if (successful.current.has(keyOf(row))) continue;
           try {
-            const response = await fetch(appUrl("/api/wekkuk/players"), {
+            let response: Response | undefined;
+            for (let retry = 0; retry < 3; retry++) {
+              const delay = Math.max(2000, cooldown.current - Date.now());
+              if (delay > 2000) setMessage(`위꾹 요청 제한으로 약 ${Math.ceil(delay / 1000)}초 대기 후 재시도합니다.`);
+              await sleep(delay);
+              response = await fetch(appUrl("/api/wekkuk/players"), {
               method: "POST",
               headers: { "content-type": "application/json", ...(token !== "cookie-session" ? { authorization: `Bearer ${token}` } : {}) },
               body: JSON.stringify({ bct_id: contestId, tem_sex_play: row.category, tem_age: row.age, tem_level: row.level, ply_affiliation: "", ply_name: "" }),
               signal: controller.signal,
-            });
+              });
+              if (response.status !== 429) break;
+              const header = response.headers.get("retry-after");
+              const requested = header && /^\d+$/.test(header) ? Number(header) * 1000 : header ? Date.parse(header) - Date.now() : 0;
+              const waitMs = Math.max(Number.isFinite(requested) ? requested : 0, 60000 * 2 ** retry);
+              cooldown.current = Date.now() + waitMs;
+              await response.body?.cancel();
+              if (retry === 2 || waitMs > 300000) {
+                expired = true;
+                setMessage(`요청 제한이 계속되어 집계를 중단했습니다. 약 ${Math.ceil(waitMs / 1000)}초 후 미완료 항목을 다시 조회해 주세요.`);
+                throw new Error("요청 제한으로 조회 중단");
+              }
+            }
+            if (!response || controller.signal.aborted) return;
+            setMessage("");
             if (response.status === 401) {
               expired = true;
               if (!controller.signal.aborted) setMessage("로그인이 만료되어 집계를 중단했습니다. 다시 로그인해 주세요.");
@@ -41,14 +70,17 @@ export default function TeamSummary({ contestId, token, options }: { contestId: 
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || "조회 실패");
             if (!Array.isArray(data.items)) throw new Error("응답 형식 오류");
-            if (!controller.signal.aborted) setRows(current => current.map((item, i) => i === index ? { ...item, count: data.items.length } : item));
+            if (!controller.signal.aborted) {
+              successful.current.set(keyOf(row), data.items.length);
+              setRows(current => current.map((item, i) => i === index ? { ...item, count: data.items.length } : item));
+            }
           } catch (error) {
             if (controller.signal.aborted) return;
             setRows(current => current.map((item, i) => i === index ? { ...item, error: error instanceof Error ? error.message : "조회 실패" } : item));
           }
         }
       }
-      await Promise.all([worker(), worker()]);
+      await worker();
       if (!controller.signal.aborted) setBusy(false);
     }
     void run();
@@ -72,7 +104,7 @@ export default function TeamSummary({ contestId, token, options }: { contestId: 
       </div>
       <p role="status">{busy ? `조회 중: ${completed} / ${rows.length}개 조합` : complete ? `${rows.length}개 조합 집계 완료` : rows.length ? `집계 미완료: ${rows.filter(row => row.error).length}개 실패, ${rows.length - completed}개 미조회` : "집계할 종목 정보가 없습니다."}</p>
       {message && <p role="alert">{message}</p>}
-      <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setAttempt(value => value + 1)}>다시 집계</button>
+      <button type="button" className="btn btn-secondary" disabled={busy || complete} onClick={() => setAttempt(value => value + 1)}>미완료 항목 다시 조회</button>
       {rows.length > 0 && <div className="team-summary-table"><table>
         <caption>종목·연령대·등급별 참가팀 수</caption>
         <thead><tr><th scope="col">종목</th><th scope="col">연령대</th><th scope="col">등급</th><th scope="col">참가팀</th></tr></thead>

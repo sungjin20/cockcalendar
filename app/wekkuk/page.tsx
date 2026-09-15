@@ -31,9 +31,9 @@ export default async function Page({
     initialContests = data.items;
     initialTotalPages = data.totalPages;
     initialPage = data.page;
-    initialListMessage = data.warning;
   } catch (error) {
-    initialListMessage = error instanceof Error ? error.message : "대회 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
+    console.error("Wekkuk contest database query failed", error);
+    initialListMessage = "대회 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
   }
   const initialSelected = initialContests.find((contest) => contest.id === value(params.contest)) || null;
   if (value(params.search) === "1") {

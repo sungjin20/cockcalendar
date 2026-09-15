@@ -1,4 +1,4 @@
-import { isExcludedWekkukOrganizer, isExcludedWekkukTitle } from "./wekkuk-filters";
+import { dbQuery } from "../db/postgres";
 
 const WEKKUK_BASE = "https://app2.wekkuk.com/v2";
 export const WEKKUK_USER_AGENT = "Mozilla/5.0 Android Wekkuk";
@@ -51,87 +51,26 @@ export type WekkukContest = {
   date: string;
 };
 
-function parseContestPage(html: string) {
-  const pattern = /<div class="gm-top"[\s\S]*?goto_contest_view\((\d+),\s*"([^"]+)"\)'>([\s\S]*?)<\/div>\s*<\/div>/g;
-  const items: WekkukContest[] = [...html.matchAll(pattern)].map((match) => {
-    const block = match[3];
-    return {
-      id: match[1],
-      name: htmlText(match[2]),
-      organizer: htmlText(block.match(/<p class="gm-name">([\s\S]*?)<\/p>/)?.[1] || "").replace(/^\(|\)$/g, ""),
-      status: htmlText(block.match(/<span class="gm-color2">\[([\s\S]*?)\]<\/span>/)?.[1] || ""),
-      date: htmlText(block.match(/<p class="gm-time">([\s\S]*?)<\/p>/)?.[1] || ""),
-    };
-  });
-  const totalPages = Math.max(
-    1,
-    ...[...html.matchAll(/toPage\('(\d+)'/g)].map((match) => Number(match[1])),
-  );
-  return { totalPages, items };
-}
-
 const CONTEST_PAGE_SIZE = 10;
-let contestCache: { items: WekkukContest[]; expires: number } | undefined;
-let contestRequest: Promise<WekkukContest[]> | undefined;
-let contestRetryAfter = 0;
-let contestError = "";
-const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-async function loadAllContests() {
-  async function fetchPage(page: number) {
-    for (let attempt = 0; attempt < 4; attempt++) {
-      await wait(1000);
-      const response = await wekkukFetch(`/contest_badminton/contest?page=${page}`);
-      if (response.ok) return parseContestPage(await response.text());
-      if (response.status !== 429) throw new Error("위꾹 대회 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
-      const retryAfter = response.headers.get("retry-after");
-      await response.body?.cancel();
-      const delay = retryAfter && /^\d+$/.test(retryAfter) ? Number(retryAfter) * 1000 : retryAfter ? Date.parse(retryAfter) - Date.now() : 0;
-      const backoff = Math.max(Number.isFinite(delay) ? delay : 0, 5000 * 2 ** attempt);
-      if (attempt === 3 || backoff > 30000) {
-        contestRetryAfter = Date.now() + Math.max(backoff, 60000);
-        throw new Error("위꾹 서버의 요청 제한으로 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
-      }
-      await wait(backoff);
-    }
-    throw new Error("대회 목록을 불러오지 못했습니다.");
-  }
-  const first = await fetchPage(1);
-  const pages: WekkukContest[][] = [first.items];
-  for (let page = 2; page <= first.totalPages; page++) {
-    pages[page - 1] = (await fetchPage(page)).items;
-  }
-  return [...new Map(pages.flat().map(item => [item.id, item])).values()];
-}
 
 export async function getWekkukContests(page = 1) {
-  if (!contestCache || contestCache.expires <= Date.now()) {
-    if (Date.now() >= contestRetryAfter) {
-      contestRequest ??= loadAllContests().then(items => {
-        contestCache = { items, expires: Date.now() + 30 * 60 * 1000 };
-        contestError = "";
-        return items;
-      }).catch(error => {
-        contestRetryAfter = Math.max(contestRetryAfter, Date.now() + 60000);
-        contestError = error instanceof Error ? error.message : "대회 목록을 불러오지 못했습니다.";
-        throw error;
-      }).finally(() => { contestRequest = undefined; });
-      // Serve the previous complete list while refreshing it in the background.
-      if (contestCache) void contestRequest.catch(() => {});
-      else await contestRequest;
-    } else if (!contestCache) {
-      throw new Error(contestError || "잠시 후 대회 목록을 다시 조회해 주세요.");
-    }
-  }
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-  const items = (contestCache?.items || []).filter(item => {
-    const date = item.date.match(/(20\d{2})[^\d]+(\d{1,2})[^\d]+(\d{1,2})/);
-    const startDate = date ? `${date[1]}-${date[2].padStart(2, "0")}-${date[3].padStart(2, "0")}` : "";
-    return startDate >= today && !isExcludedWekkukOrganizer(item.organizer) && !isExcludedWekkukTitle(item.name);
-  });
+  const result = await dbQuery<WekkukContest>(`
+    SELECT s.source_id AS id, c.title AS name,
+      COALESCE(c.organizer, '') AS organizer, ''::text AS status,
+      CASE WHEN c.end_date > c.start_date
+        THEN to_char(c.start_date, 'YYYY-MM-DD') || '~' || to_char(c.end_date, 'YYYY-MM-DD')
+        ELSE to_char(c.start_date, 'YYYY-MM-DD')
+      END AS date
+    FROM competitions c
+    JOIN competition_sources s ON s.competition_id = c.id
+    WHERE s.platform = 'wekkuk' AND c.start_date >= $1::date
+    ORDER BY c.start_date, c.title, s.source_id
+  `, [today]);
+  const items = result.rows.map(item => ({ ...item, name: decodeHtml(item.name) }));
   const totalPages = Math.max(1, Math.ceil(items.length / CONTEST_PAGE_SIZE));
   const currentPage = Math.min(totalPages, Math.max(1, Number.isFinite(page) ? Math.floor(page) : 1));
-  return { page: currentPage, totalPages, warning: contestCache && contestCache.expires <= Date.now() ? "목록 갱신 중이거나 지연되어 이전 조회 결과를 표시합니다." : "", items: items.slice((currentPage - 1) * CONTEST_PAGE_SIZE, currentPage * CONTEST_PAGE_SIZE) };
+  return { page: currentPage, totalPages, items: items.slice((currentPage - 1) * CONTEST_PAGE_SIZE, currentPage * CONTEST_PAGE_SIZE) };
 }
 
 export async function loginWekkuk(uid: string, password: string) {

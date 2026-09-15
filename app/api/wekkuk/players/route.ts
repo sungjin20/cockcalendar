@@ -50,6 +50,15 @@ export async function POST(request: Request) {
       },
       body: form,
     });
+    if (response.status === 429) {
+      const retryAfter = response.headers.get("retry-after") || "60";
+      await response.body?.cancel();
+      return NextResponse.json({ error: "위꾹 서버의 요청 제한으로 잠시 기다린 뒤 다시 조회합니다." }, { status: 429, headers: { "Retry-After": retryAfter } });
+    }
+    if (!response.ok) {
+      await response.body?.cancel();
+      return NextResponse.json({ error: "위꾹 서버가 요청을 처리하지 못했습니다." }, { status: response.status >= 500 ? 503 : 400 });
+    }
     const text = await response.text();
     const data = JSON.parse(text);
     if (data.err !== "N") {
